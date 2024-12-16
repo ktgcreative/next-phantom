@@ -1,5 +1,5 @@
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { TOKEN_PROGRAM_ID, getAccount, getMint } from '@solana/spl-token';
 
 const connection = new Connection('https://solana-mainnet.rpc.extrnode.com/24c6319e-6696-4f0f-8ff1-2e83d7fe781e', {
     commitment: 'confirmed',
@@ -107,30 +107,38 @@ async function getTokenPrice(mint: string): Promise<number> {
             return 1;
         }
 
-        const response = await fetch(`https://price.jup.ag/v4/price?ids=${mint}`, {
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            cache: 'no-store'
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        // Try Jupiter first
+        try {
+            const response = await fetch(`https://price.jup.ag/v4/price?ids=${mint}`);
+            if (response.ok) {
+                const data = await response.json();
+                const price = data.data?.[mint]?.price;
+                if (price) {
+                    priceCache[mint] = { price, timestamp: now };
+                    return price;
+                }
+            }
+        } catch (e) {
+            console.warn('Jupiter price fetch failed, trying DexScreener...');
         }
 
-        const data = await response.json();
-        const price = data.data?.[mint]?.price || 0;
+        // Try DexScreener as fallback
+        try {
+            const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
+            const data = await response.json();
+            const price = data.pairs?.[0]?.priceUsd;
+            if (price) {
+                priceCache[mint] = { price: Number(price), timestamp: now };
+                return Number(price);
+            }
+        } catch (e) {
+            console.warn('DexScreener price fetch failed');
+        }
 
-        // Cache the result
-        priceCache[mint] = {
-            price,
-            timestamp: now
-        };
-
-        return price;
-    } catch (error) {
-        console.warn(`Price fetch failed for token ${mint}:`, error);
         // Return cached price if available, otherwise 0
+        return priceCache[mint]?.price || 0;
+    } catch (error) {
+        console.error(`All price fetching methods failed for ${mint}:`, error);
         return priceCache[mint]?.price || 0;
     }
 }
@@ -201,13 +209,30 @@ async function getSolPrice(): Promise<number> {
     return getTokenPrice('SOL');
 }
 
+async function getTokenBalance(connection: Connection, tokenAccount: PublicKey) {
+    try {
+        const info = await getAccount(connection, tokenAccount);
+        const amount = Number(info.amount);
+        const mint = await getMint(connection, info.mint);
+        const balance = amount / (10 ** mint.decimals);
+        return {
+            amount: balance,
+            decimals: mint.decimals,
+            mint: info.mint.toBase58()
+        };
+    } catch (error) {
+        console.error('Error getting token balance:', error);
+        return null;
+    }
+}
+
 export async function getTokenAccounts(walletAddress: string) {
     try {
         const publicKey = new PublicKey(walletAddress);
 
         // Get SOL balance first
         const solBalance = await connection.getBalance(publicKey);
-        const solPrice = await getSolPrice();
+        const solPrice = await getTokenPrice('SOL');
 
         const solToken = {
             mint: 'SOL',
@@ -220,23 +245,32 @@ export async function getTokenAccounts(walletAddress: string) {
             verified: true
         };
 
-        // Get other token accounts
-        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(publicKey, {
-            programId: TOKEN_PROGRAM_ID,
-        });
+        // Get all token accounts
+        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+            publicKey,
+            { programId: TOKEN_PROGRAM_ID },
+            'confirmed'
+        );
 
-        // Fetch metadata for all tokens
+        // Filter and process token accounts
         const tokensWithMetadata = await Promise.all(
             tokenAccounts.value
-                .filter(account => account.account.data.parsed.info.tokenAmount.uiAmount > 0) // Only show tokens with balance
+                .filter(account => {
+                    const amount = account.account.data.parsed.info.tokenAmount;
+                    return amount.uiAmount > 0; // Only show tokens with balance
+                })
                 .map(async (account) => {
-                    const mint = account.account.data.parsed.info.mint;
+                    const parsedInfo = account.account.data.parsed.info;
+                    const mint = parsedInfo.mint;
+                    const tokenBalance = await getTokenBalance(connection, account.pubkey);
                     const metadata = await getTokenMetadata(mint);
+
+                    if (!tokenBalance) return null;
 
                     return {
                         mint,
-                        amount: account.account.data.parsed.info.tokenAmount.uiAmount,
-                        decimals: account.account.data.parsed.info.tokenAmount.decimals,
+                        amount: tokenBalance.amount,
+                        decimals: tokenBalance.decimals,
                         name: metadata.name,
                         symbol: metadata.symbol,
                         logo: metadata.logo,
@@ -246,10 +280,11 @@ export async function getTokenAccounts(walletAddress: string) {
                 })
         );
 
-        // Combine SOL with other tokens
-        const allTokens = [solToken, ...tokensWithMetadata];
+        // Filter out null values and combine with SOL
+        const validTokens = tokensWithMetadata.filter(token => token !== null);
+        const allTokens = [solToken, ...validTokens];
 
-        // Sort tokens: verified first, then by value (price * amount)
+        // Sort tokens: verified first, then by value
         return allTokens.sort((a, b) => {
             if (a.verified !== b.verified) {
                 return a.verified ? -1 : 1;
@@ -272,6 +307,33 @@ export async function getSolanaBalance(walletAddress: string) {
         return balance;
     } catch (error) {
         console.error('Error fetching SOL balance:', error);
+        return 0;
+    }
+}
+
+async function getDexScreenerPrice(mint: string): Promise<number> {
+    try {
+        const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
+        const data = await response.json();
+        return data.pairs?.[0]?.priceUsd || 0;
+    } catch (error) {
+        console.warn(`DexScreener price fetch failed for ${mint}:`, error);
+        return 0;
+    }
+}
+
+async function getBirdeyePrice(mint: string): Promise<number> {
+    try {
+        const response = await fetch(`https://public-api.birdeye.so/public/price?address=${mint}`, {
+            headers: {
+                'X-API-KEY': 'YOUR_API_KEY',  // You'll need to get an API key
+                'Content-Type': 'application/json',
+            }
+        });
+        const data = await response.json();
+        return data.data?.value || 0;
+    } catch (error) {
+        console.warn(`Birdeye price fetch failed for ${mint}:`, error);
         return 0;
     }
 } 
