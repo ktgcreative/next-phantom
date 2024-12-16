@@ -1,101 +1,195 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { getTokenAccounts } from '@/app/utils/tokens';
+import { useWallet } from '@/app/providers/WalletProvider';
+import WalletButton from './components/WalletButton';
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+interface TokenInfo {
+    mint: string;
+    amount: number;
+    decimals: number;
+    symbol: string;
+    name: string;
+    logo?: string;
+    price?: number;
+    verified?: boolean;
+}
+
+export default function TokensPage() {
+    const { walletAddress, isConnected } = useWallet();
+    const [tokens, setTokens] = useState<TokenInfo[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [totalValue, setTotalValue] = useState(0);
+
+    const fetchTokens = async (address: string) => {
+        try {
+            setIsLoading(true);
+            const tokenData = await getTokenAccounts(address);
+            setTokens(tokenData);
+
+            // Calculate total portfolio value
+            const total = tokenData.reduce((acc, token) => {
+                return acc + (token.price || 0) * (token.amount || 0);
+            }, 0);
+            setTotalValue(total);
+        } catch (error) {
+            console.error('Error fetching tokens:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isConnected && walletAddress) {
+            fetchTokens(walletAddress);
+        }
+    }, [isConnected, walletAddress]);
+
+    const container = {
+        hidden: { opacity: 0 },
+        show: {
+            opacity: 1,
+            transition: {
+                staggerChildren: 0.2
+            }
+        }
+    };
+
+    const item = {
+        hidden: { opacity: 0, x: -20 },
+        show: { opacity: 1, x: 0 }
+    };
+
+    return (
+        <div className="min-h-screen bg-black text-white font-mono">
+            <div className="container mx-auto px-4 py-8 relative z-0">
+                <WalletButton />
+
+                {isConnected && (
+                    <div className="mt-24 relative z-0">
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-zinc-900/90 backdrop-blur-sm p-6 rounded-lg border border-zinc-800 mb-6"
+                        >
+                            <h2 className="text-xs text-purple-400 mb-2">TOTAL PORTFOLIO VALUE</h2>
+                            <p className="text-3xl font-bold">
+                                ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                        </motion.div>
+
+                        <div className="bg-zinc-900/90 backdrop-blur-sm rounded-lg border border-zinc-800">
+                            <div className="p-4 border-b border-zinc-800">
+                                <h2 className="text-xl font-bold">Your Assets</h2>
+                            </div>
+
+                            {isLoading ? (
+                                <div className="p-8 text-center">
+                                    <div className="animate-pulse text-purple-400">Loading assets...</div>
+                                </div>
+                            ) : (
+                                <motion.div
+                                    variants={container}
+                                    initial="hidden"
+                                    animate="show"
+                                    className="divide-y divide-zinc-800"
+                                >
+                                    {tokens.map((token, index) => (
+                                        <motion.div
+                                            key={index}
+                                            variants={item}
+                                            className="p-4 hover:bg-zinc-800/50 transition-colors"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-4">
+                                                    {/* Token Icon */}
+                                                    {token.logo ? (
+                                                        <img
+                                                            src={token.logo}
+                                                            alt={token.symbol}
+                                                            className="w-10 h-10 rounded-full"
+                                                            onError={(e) => {
+                                                                (e.target as HTMLImageElement).src = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png'
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-full bg-purple-900/30 flex items-center justify-center">
+                                                            <span className="text-sm text-purple-300">
+                                                                {token.symbol.slice(0, 2)}
+                                                            </span>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Token Info */}
+                                                    <div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className="font-bold">{token.symbol}</span>
+                                                            {token.verified && (
+                                                                <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
+                                                                </svg>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-sm text-gray-400">{token.name}</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Token Value */}
+                                                <div className="text-right">
+                                                    <p className="font-bold">
+                                                        {token.amount.toLocaleString()} {token.symbol}
+                                                    </p>
+                                                    {token.price ? (
+                                                        <p className="text-sm text-gray-400">
+                                                            ${(token.price * token.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-sm text-gray-500">Price unavailable</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </motion.div>
+                            )}
+
+                            {!isLoading && tokens.length === 0 && (
+                                <div className="p-8 text-center text-gray-400">
+                                    No tokens found in your wallet
+                                </div>
+                            )}
+                        </div>
+
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.5 }}
+                            className="mt-6 text-center"
+                        >
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => walletAddress && fetchTokens(walletAddress)}
+                                className="bg-purple-900 text-white px-6 py-2 rounded-md hover:bg-purple-800 transition-colors"
+                            >
+                                Refresh Assets
+                            </motion.button>
+                        </motion.div>
+                    </div>
+                )}
+
+                {!isConnected && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mt-24 text-center"
+                    >
+                        <p className="text-gray-400">Connect your wallet to view your assets</p>
+                    </motion.div>
+                )}
+            </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+    );
 }
