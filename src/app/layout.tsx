@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Sora } from "next/font/google";
-import { WalletProvider } from "@/app/providers/WalletProvider";
+import { WalletProvider } from "@/providers/WalletProvider";
 import "./globals.css";
 
 const geistMono = Geist_Mono({

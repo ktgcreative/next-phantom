@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { getTokenAccounts } from '@/app/utils/tokens';
-import { useWallet } from '@/app/providers/WalletProvider';
-import PhantomWalletButton from '@/app/components/phantom/PhantomWallet';
+import { getTokenAccounts } from '@/utils/tokens';
+import { useWallet } from '@/providers/WalletProvider';
+import PhantomWalletButton from '@/components/phantom/PhantomWallet';
 
 interface TokenInfo {
     mint: string;

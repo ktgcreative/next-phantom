@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useWallet } from '@/app/providers/WalletProvider';
-import DraggableWrapper from '@/app/components/animation/gestures/DraggableWrapper';
+import { useWallet } from '@/providers/WalletProvider';
+import DraggableWrapper from '@/components/animation/gestures/DraggableWrapper';
 
 export default function PhantomWalletButton() {
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -42,6 +42,20 @@ export default function PhantomWalletButton() {
         }
     };
 
+    const calculateTotalValue = () => {
+        // Add SOL value
+        let total = balance.value;
+
+        // Add all token values
+        tokens.forEach(token => {
+            if (token.price && token.amount) {
+                total += token.price * token.amount;
+            }
+        });
+
+        return total;
+    };
+
     return (
         <DraggableWrapper className="fixed top-4 right-4 w-96 font-mono z-50">
             <div className="bg-zinc-900/90 backdrop-blur-sm p-6 rounded-lg border border-zinc-800 shadow-xl">
@@ -78,11 +92,11 @@ export default function PhantomWalletButton() {
                                 <div className="bg-zinc-800/50 p-4 rounded-md">
                                     <h3 className="text-xs text-purple-400 mb-2">SOL BALANCE</h3>
                                     <div className="flex items-baseline">
-                                        <p className="text-2xl font-bold text-white">{balance.toFixed(4)}</p>
+                                        <p className="text-2xl font-bold text-white">{balance.uiBalance.toFixed(4)}</p>
                                         <p className="text-sm text-gray-400 ml-2">SOL</p>
                                     </div>
                                     <p className="text-xs text-gray-500 mt-1">
-                                        ≈ ${(balance * 20).toFixed(2)} USD
+                                        ≈ ${calculateTotalValue().toFixed(2)} USD
                                     </p>
                                 </div>
 
@@ -171,24 +185,6 @@ export default function PhantomWalletButton() {
                                         </button>
                                     </div>
                                 </div>
-
-                                {process.env.NODE_ENV === 'development' && (
-                                    <div className="mt-4 p-4 bg-red-900/20 rounded-md">
-                                        <h4 className="text-xs text-red-400 mb-2">Wallet Component Debug:</h4>
-                                        <pre className="text-xs text-red-300 overflow-x-auto">
-                                            {JSON.stringify({
-                                                walletAddress,
-                                                isConnected,
-                                                balance: balance || 'null',
-                                                tokenCount: tokens?.length || 0,
-                                                lastUpdated: lastUpdated?.toISOString() || 'null',
-                                                error: error || 'null',
-                                                isLoading,
-                                                isRefreshing
-                                            }, null, 2)}
-                                        </pre>
-                                    </div>
-                                )}
                             </>
                         )}
                     </div>

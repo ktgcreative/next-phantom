@@ -20,35 +20,19 @@ interface TokenMetadata {
 const metadataCache: { [key: string]: TokenMetadata } = {};
 const JUPITER_API = 'https://token.jup.ag/all';
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
-
 // Price cache to avoid too many requests
 const priceCache: { [key: string]: { price: number; timestamp: number } } = {};
 const PRICE_CACHE_DURATION = 30 * 1000; // 30 seconds
 
-async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<Response> {
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        return response;
-    } catch (error) {
-        if (retries > 0) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-            return fetchWithRetry(url, retries - 1);
-        }
-        throw error;
-    }
-}
 
 // Known tokens with their metadata
 const KNOWN_TOKENS: { [key: string]: TokenMetadata } = {
-    'SOL': {  // Native SOL
+    'So11111111111111111111111111111111111111112': {  // Use official wrapped SOL mint address
         name: 'Solana',
         symbol: 'SOL',
         logo: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
         verified: true,
-        price: 0 // Will be updated from API
+        price: 0
     },
     'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': {
         name: 'USD Coin',
@@ -95,10 +79,14 @@ const KNOWN_STABLECOINS = [
 
 async function getTokenPrice(mint: string): Promise<number> {
     try {
+        // Handle SOL price fetching
+        const solMint = 'So11111111111111111111111111111111111111112';
+        const mintToCheck = mint === 'SOL' ? solMint : mint;
+
         // Check cache first
         const now = Date.now();
-        if (priceCache[mint] && (now - priceCache[mint].timestamp < PRICE_CACHE_DURATION)) {
-            return priceCache[mint].price;
+        if (priceCache[mintToCheck] && (now - priceCache[mintToCheck].timestamp < PRICE_CACHE_DURATION)) {
+            return priceCache[mintToCheck].price;
         }
 
         // Special handling for stablecoins
@@ -137,7 +125,7 @@ async function getTokenPrice(mint: string): Promise<number> {
         // Return cached price if available, otherwise 0
         return priceCache[mint]?.price || 0;
     } catch (error) {
-        console.error(`All price fetching methods failed for ${mint}:`, error);
+        console.error(`Price fetching failed for ${mint}:`, error);
         return priceCache[mint]?.price || 0;
     }
 }
@@ -203,10 +191,6 @@ async function getTokenMetadata(mint: string): Promise<TokenMetadata> {
     }
 }
 
-// Update getSolPrice to use the new price fetching
-async function getSolPrice(): Promise<number> {
-    return getTokenPrice('SOL');
-}
 
 async function getTokenBalance(connection: Connection, tokenAccount: PublicKey) {
     try {
@@ -229,18 +213,21 @@ export async function getTokenAccounts(walletAddress: string) {
     try {
         const publicKey = new PublicKey(walletAddress);
 
-        // Get SOL balance first
+        // Get SOL balance and metadata
         const solBalance = await connection.getBalance(publicKey);
-        const solPrice = await getTokenPrice('SOL');
+        const solMetadata = await getTokenMetadata('So11111111111111111111111111111111111111112');
+        const solPrice = Number(solMetadata.price) || 0;
+        const solAmount = Number(solBalance) / LAMPORTS_PER_SOL;
 
         const solToken = {
-            mint: 'SOL',
-            amount: solBalance / LAMPORTS_PER_SOL,
+            mint: 'So11111111111111111111111111111111111111112',
+            amount: solAmount,
             decimals: 9,
-            name: 'Solana',
-            symbol: 'SOL',
-            logo: KNOWN_TOKENS['SOL'].logo,
+            name: solMetadata.name || 'Solana',
+            symbol: solMetadata.symbol || 'SOL',
+            logo: solMetadata.logo || KNOWN_TOKENS['So11111111111111111111111111111111111111112'].logo,
             price: solPrice,
+            value: solAmount * solPrice,
             verified: true
         };
 
@@ -256,7 +243,7 @@ export async function getTokenAccounts(walletAddress: string) {
             tokenAccounts.value
                 .filter(account => {
                     const amount = account.account.data.parsed.info.tokenAmount;
-                    return amount.uiAmount > 0; // Only show tokens with balance
+                    return Number(amount.uiAmount) > 0;
                 })
                 .map(async (account) => {
                     const parsedInfo = account.account.data.parsed.info;
@@ -266,21 +253,26 @@ export async function getTokenAccounts(walletAddress: string) {
 
                     if (!tokenBalance) return null;
 
+                    const amount = Number(tokenBalance.amount);
+                    const price = Number(metadata.price) || 0;
+                    const value = amount * price;
+
                     return {
                         mint,
-                        amount: tokenBalance.amount,
+                        amount,
                         decimals: tokenBalance.decimals,
                         name: metadata.name,
                         symbol: metadata.symbol,
                         logo: metadata.logo,
-                        price: metadata.price,
+                        price,
+                        value,
                         verified: metadata.verified
                     };
                 })
         );
 
         // Filter out null values and combine with SOL
-        const validTokens = tokensWithMetadata.filter(token => token !== null);
+        const validTokens = tokensWithMetadata.filter((token): token is NonNullable<typeof token> => token !== null);
         const allTokens = [solToken, ...validTokens];
 
         // Sort tokens: verified first, then by value
@@ -288,8 +280,8 @@ export async function getTokenAccounts(walletAddress: string) {
             if (a.verified !== b.verified) {
                 return a.verified ? -1 : 1;
             }
-            const aValue = (a.price || 0) * (a.amount || 0);
-            const bValue = (b.price || 0) * (b.amount || 0);
+            const aValue = Number(a.value) || 0;
+            const bValue = Number(b.value) || 0;
             return bValue - aValue;
         });
 
@@ -303,36 +295,23 @@ export async function getSolanaBalance(walletAddress: string) {
     try {
         const publicKey = new PublicKey(walletAddress);
         const balance = await connection.getBalance(publicKey);
-        return balance;
+        const solMetadata = await getTokenMetadata('So11111111111111111111111111111111111111112');
+        const uiBalance = Number(balance) / LAMPORTS_PER_SOL;
+        const price = Number(solMetadata.price) || 0;
+
+        return {
+            balance: Number(balance),
+            uiBalance: Number(uiBalance.toFixed(9)), // Format to 9 decimals for SOL
+            price: price,
+            value: Number((uiBalance * price).toFixed(2))
+        };
     } catch (error) {
         console.error('Error fetching SOL balance:', error);
-        return 0;
+        return {
+            balance: 0,
+            uiBalance: 0,
+            price: 0,
+            value: 0
+        };
     }
 }
-
-async function getDexScreenerPrice(mint: string): Promise<number> {
-    try {
-        const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
-        const data = await response.json();
-        return data.pairs?.[0]?.priceUsd || 0;
-    } catch (error) {
-        console.warn(`DexScreener price fetch failed for ${mint}:`, error);
-        return 0;
-    }
-}
-
-async function getBirdeyePrice(mint: string): Promise<number> {
-    try {
-        const response = await fetch(`https://public-api.birdeye.so/public/price?address=${mint}`, {
-            headers: {
-                'X-API-KEY': 'YOUR_API_KEY',  // You'll need to get an API key
-                'Content-Type': 'application/json',
-            }
-        });
-        const data = await response.json();
-        return data.data?.value || 0;
-    } catch (error) {
-        console.warn(`Birdeye price fetch failed for ${mint}:`, error);
-        return 0;
-    }
-} 

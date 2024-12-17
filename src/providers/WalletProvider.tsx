@@ -1,8 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, ReactNode } from 'react';
-import { getTokenAccounts, getSolanaBalance } from '@/app/utils/tokens';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { getTokenAccounts, getSolanaBalance } from '@/utils/tokens';
 export interface TokenInfo {
     mint: string;
     amount: number;
@@ -53,7 +52,12 @@ interface WalletContextType {
     disconnectWallet: () => Promise<void>;
     setWalletAddress: (address: string) => void;
     setIsConnected: (status: boolean) => void;
-    balance: number;
+    balance: {
+        balance: number;
+        uiBalance: number;
+        price: number;
+        value: number;
+    };
     tokens: TokenInfo[];
     isLoading: boolean;
     lastUpdated: Date | null;
@@ -67,7 +71,17 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 export function WalletProvider({ children }: { children: ReactNode }) {
     const [walletAddress, setWalletAddress] = useState('');
     const [isConnected, setIsConnected] = useState(false);
-    const [balance, setBalance] = useState<number>(0);
+    const [balance, setBalance] = useState<{
+        balance: number;
+        uiBalance: number;
+        price: number;
+        value: number;
+    }>({
+        balance: 0,
+        uiBalance: 0,
+        price: 0,
+        value: 0
+    });
     const [tokens, setTokens] = useState<TokenInfo[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -75,8 +89,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const fetchWalletData = async (address: string) => {
         try {
             setIsLoading(true);
-            const balanceInLamports = await getSolanaBalance(address);
-            setBalance(balanceInLamports / LAMPORTS_PER_SOL);
+            const balanceData = await getSolanaBalance(address);
+            setBalance(balanceData);
             const tokenData = await getTokenAccounts(address);
             setTokens(tokenData);
             setLastUpdated(new Date());
@@ -103,7 +117,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             await disconnectPhantom();
             setWalletAddress('');
             setIsConnected(false);
-            setBalance(0);
+            setBalance({
+                balance: 0,
+                uiBalance: 0,
+                price: 0,
+                value: 0
+            });
             setTokens([]);
             setLastUpdated(null);
         } catch (error) {
