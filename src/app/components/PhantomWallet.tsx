@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { getTokenAccounts, getSolanaBalance } from '@/app/utils/tokens';
 import { useWallet } from '@/app/providers/WalletProvider';
+import DraggableWrapper from '@/app/components/animation/gestures/DraggableWrapper';
+
 
 interface PhantomWindow extends Window {
     phantom?: {
@@ -87,7 +89,7 @@ export default function PhantomWalletButton() {
     };
 
     return (
-        <div className="fixed top-4 right-4 w-96 font-mono">
+        <DraggableWrapper className="fixed top-4 right-4 w-96 font-mono z-50">
             <div className="bg-zinc-900/90 backdrop-blur-sm p-6 rounded-lg border border-zinc-800 shadow-xl">
                 {!isConnected ? (
                     <button
@@ -213,6 +215,6 @@ export default function PhantomWalletButton() {
                     </div>
                 )}
             </div>
-        </div>
+        </DraggableWrapper>
     );
 } 

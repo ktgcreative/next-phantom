@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { getTokenAccounts } from '@/app/utils/tokens';
 import { useWallet } from '@/app/providers/WalletProvider';
-import WalletButton from './components/WalletButton';
+import PhantomWalletButton from '@/app/components/PhantomWallet';
 
 interface TokenInfo {
     mint: string;
@@ -65,7 +65,7 @@ export default function TokensPage() {
     return (
         <div className="min-h-screen bg-black text-white font-mono">
             <div className="container mx-auto px-4 py-8 relative z-0">
-                <WalletButton />
+                <PhantomWalletButton />
 
                 {isConnected && (
                     <div className="mt-24 relative z-0">

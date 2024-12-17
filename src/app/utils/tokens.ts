@@ -20,7 +20,6 @@ interface TokenMetadata {
 const metadataCache: { [key: string]: TokenMetadata } = {};
 const JUPITER_API = 'https://token.jup.ag/all';
 
-// Retry configuration
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
 
