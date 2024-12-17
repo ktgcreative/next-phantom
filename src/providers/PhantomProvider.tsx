@@ -1,50 +1,14 @@
 'use client';
 
 import { createContext, useContext, useState, ReactNode } from 'react';
-import { getTokenAccounts, getSolanaBalance } from '@/utils/tokens';
-export interface TokenInfo {
-    mint: string;
-    amount: number;
-    decimals: number;
-    symbol: string;
-    name: string;
-    logo?: string;
-    price?: number;
-    verified?: boolean;
-}
+import {
+    TokenInfo,
+    getTokenAccounts,
+    getSolanaBalance,
+    connectPhantom,
+    disconnectPhantom
+} from '@/data/sol';
 
-interface PhantomWindow extends Window {
-    phantom?: {
-        solana?: {
-            connect(): Promise<{ publicKey: { toString(): string } }>;
-            disconnect(): Promise<void>;
-            isConnected: boolean;
-            signMessage(message: Uint8Array, encoding: string): Promise<{ signature: Uint8Array }>;
-        };
-    };
-}
-
-export const connectPhantom = async (): Promise<string> => {
-    const window = globalThis.window as PhantomWindow;
-    const provider = window?.phantom?.solana;
-
-    if (!provider) {
-        window.open('https://phantom.app/', '_blank');
-        throw new Error("Phantom provider not found");
-    }
-
-    const response = await provider.connect();
-    return response.publicKey.toString();
-};
-
-export const disconnectPhantom = async (): Promise<void> => {
-    const window = globalThis.window as PhantomWindow;
-    const provider = window?.phantom?.solana;
-
-    if (provider) {
-        await provider.disconnect();
-    }
-};
 interface WalletContextType {
     walletAddress: string;
     isConnected: boolean;
@@ -63,8 +27,6 @@ interface WalletContextType {
     lastUpdated: Date | null;
     fetchWalletData: (address: string) => Promise<void>;
 }
-
-
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 

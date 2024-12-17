@@ -1,14 +1,8 @@
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, getAccount, getMint } from '@solana/spl-token';
 
-const connection = new Connection('https://solana-mainnet.rpc.extrnode.com/24c6319e-6696-4f0f-8ff1-2e83d7fe781e', {
-    commitment: 'confirmed',
-    httpHeaders: {
-        'Content-Type': 'application/json',
-    },
-});
-
-interface TokenMetadata {
+// Types
+export interface TokenMetadata {
     name: string;
     symbol: string;
     logo?: string;
@@ -16,18 +10,44 @@ interface TokenMetadata {
     verified?: boolean;
 }
 
-// Cache for token metadata
-const metadataCache: { [key: string]: TokenMetadata } = {};
-const JUPITER_API = 'https://token.jup.ag/all';
+export interface TokenInfo {
+    mint: string;
+    amount: number;
+    decimals: number;
+    symbol: string;
+    name: string;
+    logo?: string;
+    price?: number;
+    verified?: boolean;
+    value?: number;
+}
 
-// Price cache to avoid too many requests
-const priceCache: { [key: string]: { price: number; timestamp: number } } = {};
+interface JupiterToken {
+    address: string;
+    name: string;
+    symbol: string;
+    logoURI?: string;
+    tags?: string[];
+}
+
+// Constants
+const connection = new Connection('https://solana-mainnet.rpc.extrnode.com/24c6319e-6696-4f0f-8ff1-2e83d7fe781e', {
+    commitment: 'confirmed',
+    httpHeaders: {
+        'Content-Type': 'application/json',
+    },
+});
+
+const JUPITER_API = 'https://token.jup.ag/all';
 const PRICE_CACHE_DURATION = 30 * 1000; // 30 seconds
 
+// Cache
+const metadataCache: { [key: string]: TokenMetadata } & { __tokenList?: JupiterToken[] } = {};
+const priceCache: { [key: string]: { price: number; timestamp: number } } = {};
 
-// Known tokens with their metadata
+// Known tokens and constants
 const KNOWN_TOKENS: { [key: string]: TokenMetadata } = {
-    'So11111111111111111111111111111111111111112': {  // Use official wrapped SOL mint address
+    'So11111111111111111111111111111111111111112': {
         name: 'Solana',
         symbol: 'SOL',
         logo: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
@@ -39,62 +59,58 @@ const KNOWN_TOKENS: { [key: string]: TokenMetadata } = {
         symbol: 'USDC',
         logo: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
         verified: true,
-        price: 1 // USDC is pegged to USD
+        price: 1
     },
     'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': {
         name: 'USDT',
         symbol: 'USDT',
         logo: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.png',
         verified: true,
-        price: 1 // USDT is pegged to USD
+        price: 1
     },
     'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263': {
         name: 'Bonk',
         symbol: 'BONK',
         logo: 'https://arweave.net/hQB7PMqF_HZXfhOjwOPhW_3UKEZxWJACml-V_Ak9ALs',
         verified: true,
-        price: 0 // Will be updated from API
+        price: 0
     },
     'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So': {
         name: 'Marinade Staked SOL',
         symbol: 'mSOL',
         logo: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So/logo.png',
         verified: true,
-        price: 0 // Will be updated from API
+        price: 0
     },
     'RLBxxFkseAZ4RgJH3Sqn8jXxhmGoz9jWxDNJMh8pL7a': {
         name: 'Raydium',
         symbol: 'RAY',
         logo: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png',
         verified: true,
-        price: 0 // Will be updated from API
+        price: 0
     }
 };
 
-// Known stablecoins that are always $1
 const KNOWN_STABLECOINS = [
     'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
     'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
 ];
 
+// Utility functions
 async function getTokenPrice(mint: string): Promise<number> {
     try {
-        // Handle SOL price fetching
         const solMint = 'So11111111111111111111111111111111111111112';
         const mintToCheck = mint === 'SOL' ? solMint : mint;
 
-        // Check cache first
         const now = Date.now();
         if (priceCache[mintToCheck] && (now - priceCache[mintToCheck].timestamp < PRICE_CACHE_DURATION)) {
             return priceCache[mintToCheck].price;
         }
 
-        // Special handling for stablecoins
         if (KNOWN_STABLECOINS.includes(mint)) {
             return 1;
         }
 
-        // Try Jupiter first
         try {
             const response = await fetch(`https://price.jup.ag/v4/price?ids=${mint}`);
             if (response.ok) {
@@ -105,11 +121,10 @@ async function getTokenPrice(mint: string): Promise<number> {
                     return price;
                 }
             }
-        } catch (e) {
+        } catch {
             console.warn('Jupiter price fetch failed, trying DexScreener...');
         }
 
-        // Try DexScreener as fallback
         try {
             const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
             const data = await response.json();
@@ -118,11 +133,10 @@ async function getTokenPrice(mint: string): Promise<number> {
                 priceCache[mint] = { price: Number(price), timestamp: now };
                 return Number(price);
             }
-        } catch (e) {
+        } catch {
             console.warn('DexScreener price fetch failed');
         }
 
-        // Return cached price if available, otherwise 0
         return priceCache[mint]?.price || 0;
     } catch (error) {
         console.error(`Price fetching failed for ${mint}:`, error);
@@ -130,23 +144,18 @@ async function getTokenPrice(mint: string): Promise<number> {
     }
 }
 
-// Update getTokenMetadata to use the new price fetching
 async function getTokenMetadata(mint: string): Promise<TokenMetadata> {
     try {
-        // Check cache first
         if (metadataCache[mint]) {
-            // Update price even if metadata is cached
             metadataCache[mint].price = await getTokenPrice(mint);
             return metadataCache[mint];
         }
 
-        // Get base metadata
         let metadata: TokenMetadata;
         if (KNOWN_TOKENS[mint]) {
             metadata = { ...KNOWN_TOKENS[mint] };
         } else {
-            // Fetch from Jupiter if not a known token
-            if (!metadataCache['__tokenList']) {
+            if (!metadataCache.__tokenList) {
                 try {
                     const response = await fetch(JUPITER_API, {
                         headers: {
@@ -154,30 +163,25 @@ async function getTokenMetadata(mint: string): Promise<TokenMetadata> {
                         },
                         cache: 'no-store'
                     });
-                    const allTokens = await response.json();
-                    metadataCache['__tokenList'] = allTokens;
+                    metadataCache.__tokenList = await response.json() as JupiterToken[];
                 } catch (error) {
                     console.error('Error fetching token list:', error);
-                    metadataCache['__tokenList'] = [];
+                    metadataCache.__tokenList = [];
                 }
             }
 
-            const tokenList = metadataCache['__tokenList'];
-            const token = tokenList.find((t: any) => t.address === mint);
+            const token = metadataCache.__tokenList?.find((t) => t.address === mint);
 
             metadata = {
                 name: token?.name || 'Unknown Token',
                 symbol: token?.symbol || '???',
-                logo: token?.logoURI || null,
+                logo: token?.logoURI || undefined,
                 verified: token?.tags?.includes('verified') || false,
                 price: 0
             };
         }
 
-        // Get latest price
         metadata.price = await getTokenPrice(mint);
-
-        // Cache the result
         metadataCache[mint] = metadata;
         return metadata;
     } catch (error) {
@@ -190,7 +194,6 @@ async function getTokenMetadata(mint: string): Promise<TokenMetadata> {
         };
     }
 }
-
 
 async function getTokenBalance(connection: Connection, tokenAccount: PublicKey) {
     try {
@@ -213,7 +216,6 @@ export async function getTokenAccounts(walletAddress: string) {
     try {
         const publicKey = new PublicKey(walletAddress);
 
-        // Get SOL balance and metadata
         const solBalance = await connection.getBalance(publicKey);
         const solMetadata = await getTokenMetadata('So11111111111111111111111111111111111111112');
         const solPrice = Number(solMetadata.price) || 0;
@@ -231,14 +233,12 @@ export async function getTokenAccounts(walletAddress: string) {
             verified: true
         };
 
-        // Get all token accounts
         const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
             publicKey,
             { programId: TOKEN_PROGRAM_ID },
             'confirmed'
         );
 
-        // Filter and process token accounts
         const tokensWithMetadata = await Promise.all(
             tokenAccounts.value
                 .filter(account => {
@@ -271,11 +271,9 @@ export async function getTokenAccounts(walletAddress: string) {
                 })
         );
 
-        // Filter out null values and combine with SOL
         const validTokens = tokensWithMetadata.filter((token): token is NonNullable<typeof token> => token !== null);
         const allTokens = [solToken, ...validTokens];
 
-        // Sort tokens: verified first, then by value
         return allTokens.sort((a, b) => {
             if (a.verified !== b.verified) {
                 return a.verified ? -1 : 1;
@@ -301,7 +299,7 @@ export async function getSolanaBalance(walletAddress: string) {
 
         return {
             balance: Number(balance),
-            uiBalance: Number(uiBalance.toFixed(9)), // Format to 9 decimals for SOL
+            uiBalance: Number(uiBalance.toFixed(9)),
             price: price,
             value: Number((uiBalance * price).toFixed(2))
         };
@@ -315,3 +313,37 @@ export async function getSolanaBalance(walletAddress: string) {
         };
     }
 }
+
+// Phantom wallet functions
+export interface PhantomWindow extends Window {
+    phantom?: {
+        solana?: {
+            connect(): Promise<{ publicKey: { toString(): string } }>;
+            disconnect(): Promise<void>;
+            isConnected: boolean;
+            signMessage(message: Uint8Array, encoding: string): Promise<{ signature: Uint8Array }>;
+        };
+    };
+}
+
+export const connectPhantom = async (): Promise<string> => {
+    const window = globalThis.window as PhantomWindow;
+    const provider = window?.phantom?.solana;
+
+    if (!provider) {
+        window.open('https://phantom.app/', '_blank');
+        throw new Error("Phantom provider not found");
+    }
+
+    const response = await provider.connect();
+    return response.publicKey.toString();
+};
+
+export const disconnectPhantom = async (): Promise<void> => {
+    const window = globalThis.window as PhantomWindow;
+    const provider = window?.phantom?.solana;
+
+    if (provider) {
+        await provider.disconnect();
+    }
+}; 

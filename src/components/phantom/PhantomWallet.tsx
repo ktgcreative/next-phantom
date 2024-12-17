@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useWallet } from '@/providers/WalletProvider';
+import { useWallet } from '@/providers/PhantomProvider';
 import DraggableWrapper from '@/components/animation/gestures/DraggableWrapper';
 
 export default function PhantomWalletButton() {

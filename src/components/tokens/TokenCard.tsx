@@ -1,6 +1,6 @@
 'use client';
 
-import { TokenInfo } from '@/providers/WalletProvider';
+import { TokenInfo } from '@/data/sol';
 import StaggerItem from '../animation/items/StaggerItem';
 
 interface TokenCardProps {
