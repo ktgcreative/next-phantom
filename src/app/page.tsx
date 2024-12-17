@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { getTokenAccounts } from '@/app/utils/tokens';
 import { useWallet } from '@/app/providers/WalletProvider';
-import PhantomWalletButton from '@/app/components/PhantomWallet';
+import PhantomWalletButton from '@/app/components/phantom/PhantomWallet';
 
 interface TokenInfo {
     mint: string;
@@ -46,6 +46,20 @@ export default function TokensPage() {
             fetchTokens(walletAddress);
         }
     }, [isConnected, walletAddress]);
+
+    useEffect(() => {
+        const handleWalletRefresh = () => {
+            if (walletAddress) {
+                fetchTokens(walletAddress);
+            }
+        };
+
+        window.addEventListener('wallet-refreshed', handleWalletRefresh);
+
+        return () => {
+            window.removeEventListener('wallet-refreshed', handleWalletRefresh);
+        };
+    }, [walletAddress, fetchTokens]);
 
     const container = {
         hidden: { opacity: 0 },

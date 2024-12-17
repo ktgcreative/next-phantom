@@ -1,90 +1,44 @@
 'use client';
 
 import { useState } from 'react';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { getTokenAccounts, getSolanaBalance } from '@/app/utils/tokens';
 import { useWallet } from '@/app/providers/WalletProvider';
 import DraggableWrapper from '@/app/components/animation/gestures/DraggableWrapper';
 
-
-interface PhantomWindow extends Window {
-    phantom?: {
-        solana?: {
-            connect(): Promise<{ publicKey: { toString(): string } }>;
-            disconnect(): Promise<void>;
-            isConnected: boolean;
-            signMessage(message: Uint8Array, encoding: string): Promise<{ signature: Uint8Array }>;
-        };
-    };
-}
-
-interface TokenInfo {
-    mint: string;
-    amount: number;
-    decimals: number;
-    symbol: string;
-    name: string;
-    logo?: string;
-    price?: number;
-    verified?: boolean;
-}
-
 export default function PhantomWalletButton() {
-    const { walletAddress, isConnected, setWalletAddress, setIsConnected } = useWallet();
-    const [balance, setBalance] = useState<number>(0);
-    const [tokens, setTokens] = useState<TokenInfo[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const fetchWalletData = async (address: string) => {
+    const {
+        walletAddress,
+        isConnected,
+        connectWallet,
+        disconnectWallet,
+        balance,
+        tokens,
+        isLoading,
+        lastUpdated,
+        fetchWalletData
+    } = useWallet();
+
+    const handleRefresh = async () => {
+        if (isRefreshing) return;
+
+        setIsRefreshing(true);
+        setError(null);
+
         try {
-            setIsLoading(true);
-            const balanceInLamports = await getSolanaBalance(address);
-            setBalance(balanceInLamports / LAMPORTS_PER_SOL);
-            const tokenData = await getTokenAccounts(address);
-            setTokens(tokenData);
-            setLastUpdated(new Date());
-        } catch (error) {
-            console.error("Error fetching wallet data:", error);
+            await fetchWalletData(walletAddress);
+            window.dispatchEvent(new CustomEvent('wallet-refreshed'));
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to refresh wallet data';
+            setError(errorMessage);
+            console.error('Wallet refresh error:', {
+                error: err,
+                walletAddress,
+                timestamp: new Date().toISOString()
+            });
         } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const connectWallet = async () => {
-        try {
-            const window = globalThis.window as PhantomWindow;
-            const provider = window?.phantom?.solana;
-
-            if (!provider) {
-                window.open('https://phantom.app/', '_blank');
-                return;
-            }
-
-            const response = await provider.connect();
-            const address = response.publicKey.toString();
-            setWalletAddress(address);
-            setIsConnected(true);
-            await fetchWalletData(address);
-        } catch (error) {
-            console.error("Error connecting to wallet:", error);
-        }
-    };
-
-    const disconnectWallet = async () => {
-        try {
-            const window = globalThis.window as PhantomWindow;
-            const provider = window?.phantom?.solana;
-
-            if (provider) {
-                await provider.disconnect();
-                setWalletAddress('');
-                setIsConnected(false);
-                setBalance(0);
-                setTokens([]);
-            }
-        } catch (error) {
-            console.error("Error disconnecting wallet:", error);
+            setIsRefreshing(false);
         }
     };
 
@@ -199,17 +153,42 @@ export default function PhantomWalletButton() {
 
                                 <div className="pt-4 border-t border-zinc-800">
                                     <div className="flex justify-between items-center">
-                                        <p className="text-xs text-gray-500">
-                                            {lastUpdated ? `Last updated: ${lastUpdated.toLocaleTimeString()}` : 'Not updated yet'}
-                                        </p>
+                                        <div>
+                                            <p className="text-xs text-gray-500">
+                                                {lastUpdated ? `Last updated: ${lastUpdated.toLocaleTimeString()}` : 'Not updated yet'}
+                                            </p>
+                                            {error && (
+                                                <p className="text-xs text-red-400 mt-1">{error}</p>
+                                            )}
+                                        </div>
                                         <button
-                                            onClick={() => fetchWalletData(walletAddress)}
-                                            className="text-purple-400 hover:text-purple-300 text-sm"
+                                            onClick={handleRefresh}
+                                            disabled={isRefreshing}
+                                            className={`text-purple-400 hover:text-purple-300 text-sm ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''
+                                                }`}
                                         >
-                                            Refresh
+                                            {isRefreshing ? 'Refreshing...' : 'Refresh'}
                                         </button>
                                     </div>
                                 </div>
+
+                                {process.env.NODE_ENV === 'development' && (
+                                    <div className="mt-4 p-4 bg-red-900/20 rounded-md">
+                                        <h4 className="text-xs text-red-400 mb-2">Wallet Component Debug:</h4>
+                                        <pre className="text-xs text-red-300 overflow-x-auto">
+                                            {JSON.stringify({
+                                                walletAddress,
+                                                isConnected,
+                                                balance: balance || 'null',
+                                                tokenCount: tokens?.length || 0,
+                                                lastUpdated: lastUpdated?.toISOString() || 'null',
+                                                error: error || 'null',
+                                                isLoading,
+                                                isRefreshing
+                                            }, null, 2)}
+                                        </pre>
+                                    </div>
+                                )}
                             </>
                         )}
                     </div>
