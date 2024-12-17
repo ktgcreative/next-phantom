@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import {
     TokenInfo,
     getTokenAccounts,
@@ -23,12 +23,15 @@ interface WalletContextType {
         value: number;
     };
     tokens: TokenInfo[];
+    totalValue: number;
     isLoading: boolean;
     lastUpdated: Date | null;
     fetchWalletData: (address: string) => Promise<void>;
+    fetchTokens: (address: string) => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
+
 
 export function WalletProvider({ children }: { children: ReactNode }) {
     const [walletAddress, setWalletAddress] = useState('');
@@ -45,23 +48,57 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         value: 0
     });
     const [tokens, setTokens] = useState<TokenInfo[]>([]);
+    const [totalValue, setTotalValue] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+    const fetchTokens = async (address: string) => {
+        try {
+            setIsLoading(true);
+            const tokenData = await getTokenAccounts(address);
+            setTokens(tokenData);
+
+            // Calculate total portfolio value including SOL
+            const tokenValue = tokenData.reduce((acc, token) => {
+                return acc + (token.price || 0) * (token.amount || 0);
+            }, 0);
+            const totalValue = tokenValue + balance.value;
+            setTotalValue(totalValue);
+
+            setLastUpdated(new Date());
+        } catch (error) {
+            console.error("Error fetching tokens:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const fetchWalletData = async (address: string) => {
         try {
             setIsLoading(true);
             const balanceData = await getSolanaBalance(address);
             setBalance(balanceData);
-            const tokenData = await getTokenAccounts(address);
-            setTokens(tokenData);
-            setLastUpdated(new Date());
+            await fetchTokens(address);
         } catch (error) {
             console.error("Error fetching wallet data:", error);
         } finally {
             setIsLoading(false);
         }
     };
+
+    // Add wallet refresh event listener
+    useEffect(() => {
+        const handleWalletRefresh = () => {
+            if (walletAddress) {
+                fetchWalletData(walletAddress);
+            }
+        };
+
+        window.addEventListener('wallet-refreshed', handleWalletRefresh);
+        return () => {
+            window.removeEventListener('wallet-refreshed', handleWalletRefresh);
+        };
+    }, [walletAddress]);
 
     const connectWallet = async () => {
         try {
@@ -103,9 +140,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 setIsConnected,
                 balance,
                 tokens,
+                totalValue,
                 isLoading,
                 lastUpdated,
                 fetchWalletData,
+                fetchTokens,
             }}
         >
             {children}

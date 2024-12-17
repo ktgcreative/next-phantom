@@ -1,12 +1,12 @@
 'use client';
 
-import useTokens from '@/hooks/useTokens';
+import { useWallet } from '@/providers/PhantomProvider';
 import PhantomWalletButton from '@/components/phantom/PhantomWallet';
 import SlideInContainer from '@/components/animation/containers/SlideInContainer';
 import TokenTable from '@/components/tokens/TokenTable';
 
 export default function TokensPage() {
-    const { tokens, isLoading, totalValue } = useTokens();
+    const { tokens, isLoading, totalValue } = useWallet();
 
     return (
         <div className="min-h-screen bg-black text-white font-mono">

@@ -1,67 +1,30 @@
 'use client';
 
-import { useState } from 'react';
-import { useWallet } from '@/providers/PhantomProvider';
+import usePhantom from '@/hooks/usePhantom';
 import DraggableWrapper from '@/components/animation/gestures/DraggableWrapper';
 
 export default function PhantomWalletButton() {
-    const [isRefreshing, setIsRefreshing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
     const {
         walletAddress,
         isConnected,
-        connectWallet,
-        disconnectWallet,
         balance,
         tokens,
+        totalValue,
         isLoading,
+        isRefreshing,
+        error,
         lastUpdated,
-        fetchWalletData
-    } = useWallet();
-
-    const handleRefresh = async () => {
-        if (isRefreshing) return;
-
-        setIsRefreshing(true);
-        setError(null);
-
-        try {
-            await fetchWalletData(walletAddress);
-            window.dispatchEvent(new CustomEvent('wallet-refreshed'));
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Failed to refresh wallet data';
-            setError(errorMessage);
-            console.error('Wallet refresh error:', {
-                error: err,
-                walletAddress,
-                timestamp: new Date().toISOString()
-            });
-        } finally {
-            setIsRefreshing(false);
-        }
-    };
-
-    const calculateTotalValue = () => {
-        // Add SOL value
-        let total = balance.value;
-
-        // Add all token values
-        tokens.forEach(token => {
-            if (token.price && token.amount) {
-                total += token.price * token.amount;
-            }
-        });
-
-        return total;
-    };
+        connect,
+        disconnect,
+        refresh
+    } = usePhantom();
 
     return (
         <DraggableWrapper className="fixed top-4 right-4 w-96 font-mono z-50">
             <div className="bg-zinc-900/90 backdrop-blur-sm p-6 rounded-lg border border-zinc-800 shadow-xl">
                 {!isConnected ? (
                     <button
-                        onClick={connectWallet}
+                        onClick={connect}
                         className="w-full bg-purple-900 text-white px-4 py-3 rounded-md hover:bg-purple-800 transition-colors flex items-center justify-center space-x-2"
                     >
                         <span>Connect Phantom Wallet</span>
@@ -76,7 +39,7 @@ export default function PhantomWalletButton() {
                                 </p>
                             </div>
                             <button
-                                onClick={disconnectWallet}
+                                onClick={disconnect}
                                 className="bg-red-900/50 text-red-200 px-3 py-1 rounded-md text-sm hover:bg-red-800 transition-colors"
                             >
                                 Disconnect
@@ -96,7 +59,7 @@ export default function PhantomWalletButton() {
                                         <p className="text-sm text-gray-400 ml-2">SOL</p>
                                     </div>
                                     <p className="text-xs text-gray-500 mt-1">
-                                        ≈ ${calculateTotalValue().toFixed(2)} USD
+                                        ≈ ${totalValue.toFixed(2)} USD
                                     </p>
                                 </div>
 
@@ -176,10 +139,9 @@ export default function PhantomWalletButton() {
                                             )}
                                         </div>
                                         <button
-                                            onClick={handleRefresh}
+                                            onClick={refresh}
                                             disabled={isRefreshing}
-                                            className={`text-purple-400 hover:text-purple-300 text-sm ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''
-                                                }`}
+                                            className={`text-purple-400 hover:text-purple-300 text-sm ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         >
                                             {isRefreshing ? 'Refreshing...' : 'Refresh'}
                                         </button>

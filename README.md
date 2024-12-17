@@ -2,26 +2,6 @@
 
 A modern Solana wallet interface built with Next.js and Phantom Wallet integration. Features real-time token tracking and portfolio management.
 
-## 🚀 Quick Start
-
-1. **Install**
-   ```bash
-   git clone https://github.com/yourusername/auto-phantom.git
-   cd auto-phantom
-   npm install
-   ```
-
-2. **Configure**
-   ```env
-   NEXT_PUBLIC_API_KEY=your_api_key_here
-   ```
-
-3. **Run**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) and connect your Phantom wallet.
-
 ## 🌟 Features
 
 ### Phantom Wallet Integration
@@ -168,38 +148,10 @@ Auto Phantom incorporates industry-standard security practices to safeguard user
 - **Trusted RPC Endpoints**: Connects to verified Solana RPC endpoints to ensure secure and reliable blockchain interactions.
 - **Client-Side Operations**: All wallet interactions are executed on the client side, minimizing potential attack surfaces.
 
-## 🛠 Contributing
+### Custom Hooks
 
-Contributions are welcome! Please follow these steps to contribute to Auto Phantom:
-
-1. **Fork the Repository**
-2. **Create a Feature Branch**
-   ```bash
-   git checkout -b feature/YourFeature
-   ```
-3. **Commit Your Changes**
-   ```bash
-   git commit -m "Add your message here"
-   ```
-4. **Push to the Branch**
-   ```bash
-   git push origin feature/YourFeature
-   ```
-5. **Open a Pull Request**
-
-Please ensure your code follows the project's coding standards and passes all tests.
-
-## 📜 License
-
-This project is licensed under the [MIT License](LICENSE).
-
-## 📞 Contact
-
-For questions or support, please contact [your.email@example.com](mailto:your.email@example.com).
-
-### Custom Hooks (`src/hooks/useTokens.ts`)
-
-The `useTokens` hook provides a streamlined way to manage token data within the application. It encapsulates the logic for fetching token accounts, managing loading states, calculating the total portfolio value, and handling wallet refresh events. By using this hook, components can easily access and manage token-related data without redundant code.
+#### `useTokens` Hook (`src/hooks/useTokens.ts`)
+The `useTokens` hook provides a streamlined way to manage token data within the application:
 
 **Key Features:**
 - **Data Fetching**: Utilizes `@solana/web3.js` to fetch token accounts and balances.
@@ -207,12 +159,71 @@ The `useTokens` hook provides a streamlined way to manage token data within the 
 - **Event Handling**: Listens for wallet events to refresh token data automatically.
 
 **Usage:**
-
 ```typescript
 const { tokens, isLoading, totalValue, fetchTokens } = useTokens();
 ```
 
+#### `usePhantom` Hook (`src/hooks/usePhantom.ts`)
+The `usePhantom` hook provides comprehensive wallet management functionality with built-in error handling and UI states:
+
+**Features:**
+- **Wallet State Management**: Handles connection status, address, and balance
+- **Error Handling**: Built-in error management for wallet operations
+- **Auto-refresh**: Listens for account changes and updates data
+- **Loading States**: Manages loading and refreshing states for better UX
+
+**Interface:**
+```typescript
+interface UsePhantomReturn {
+    // Wallet State
+    walletAddress: string;
+    isConnected: boolean;
+    isLoading: boolean;
+    error: string | null;
+    lastUpdated: Date | null;
+    
+    // Balance & Tokens
+    balance: {
+        balance: number;
+        uiBalance: number;
+        price: number;
+        value: number;
+    };
+    tokens: TokenInfo[];
+    totalValue: number;
+    
+    // Actions
+    connect: () => Promise<void>;
+    disconnect: () => Promise<void>;
+    refresh: () => Promise<void>;
+    
+    // UI State
+    isRefreshing: boolean;
+    setError: (error: string | null) => void;
+}
+```
+
+**Usage:**
+```typescript
+const {
+    walletAddress,
+    isConnected,
+    balance,
+    tokens,
+    totalValue,
+    isLoading,
+    isRefreshing,
+    error,
+    connect,
+    disconnect,
+    refresh
+} = usePhantom();
+```
+
 **Benefits:**
-- **Reusability**: Centralizes data fetching logic for tokens, making it reusable across different components.
-- **Maintainability**: Simplifies component code by abstracting complex data operations.
-- **Testability**: Facilitates easier testing of data logic separately from UI components.
+- Centralized wallet management
+- Automatic error handling
+- Real-time updates
+- Loading state management
+- Type-safe interface
+- Comprehensive token value calculations
