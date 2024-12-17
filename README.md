@@ -1,6 +1,26 @@
 # Auto Phantom 👻
 
-Auto Phantom is a modern, responsive Solana wallet interface built with Next.js and integrated with the Phantom Wallet. Leveraging AI-assisted development, this application offers real-time token tracking, comprehensive portfolio management, and seamless interactions with the Solana blockchain.
+A modern Solana wallet interface built with Next.js and Phantom Wallet integration. Features real-time token tracking and portfolio management.
+
+## 🚀 Quick Start
+
+1. **Install**
+   ```bash
+   git clone https://github.com/yourusername/auto-phantom.git
+   cd auto-phantom
+   npm install
+   ```
+
+2. **Configure**
+   ```env
+   NEXT_PUBLIC_API_KEY=your_api_key_here
+   ```
+
+3. **Run**
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) and connect your Phantom wallet.
 
 ## 🌟 Features
 
@@ -127,35 +147,7 @@ Utilizes multiple APIs to aggregate and ensure accurate token pricing:
 2. **DexScreener (Secondary Source)**: Serves as a fallback to obtain prices if Jupiter API is unavailable.
 3. **Stable Coin Pricing**: Uses predefined prices for stable coins to ensure consistent and accurate valuations.
 
-## 🚀 Getting Started
 
-Follow these steps to set up and run Auto Phantom locally:
-
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/yourusername/auto-phantom.git
-   cd auto-phantom
-   ```
-
-2. **Install Dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure Environment Variables**
-   Create a `.env` file in the root directory and add any necessary environment variables. For example:
-   ```env
-   NEXT_PUBLIC_API_KEY=your_api_key_here
-   ```
-
-4. **Run the Development Server**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) in your browser to view the application.
-
-5. **Connect Your Phantom Wallet**
-   Click the "Connect Phantom Wallet" button and follow the prompts to link your wallet.
 
 ## 📦 Dependencies
 
@@ -204,3 +196,23 @@ This project is licensed under the [MIT License](LICENSE).
 ## 📞 Contact
 
 For questions or support, please contact [your.email@example.com](mailto:your.email@example.com).
+
+### Custom Hooks (`src/hooks/useTokens.ts`)
+
+The `useTokens` hook provides a streamlined way to manage token data within the application. It encapsulates the logic for fetching token accounts, managing loading states, calculating the total portfolio value, and handling wallet refresh events. By using this hook, components can easily access and manage token-related data without redundant code.
+
+**Key Features:**
+- **Data Fetching**: Utilizes `@solana/web3.js` to fetch token accounts and balances.
+- **State Management**: Manages `tokens`, `isLoading`, and `totalValue` states.
+- **Event Handling**: Listens for wallet events to refresh token data automatically.
+
+**Usage:**
+
+```typescript
+const { tokens, isLoading, totalValue, fetchTokens } = useTokens();
+```
+
+**Benefits:**
+- **Reusability**: Centralizes data fetching logic for tokens, making it reusable across different components.
+- **Maintainability**: Simplifies component code by abstracting complex data operations.
+- **Testability**: Facilitates easier testing of data logic separately from UI components.
